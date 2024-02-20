@@ -1,30 +1,33 @@
 from django.db import models
 
-class Review(models.Model):
-  class Meta:
-    db_tbale = 'reviews_review'
-    verbose_name = 'Отзыв'
-    verbose_name_plural = 'Отзывы'
+class TestUser(models.Model):
+    pass
 
-  def __str__(self) -> str:
-    return super().__str__()
+class BaseReviewModel(models.Model):
+    text = models.CharField('Текст', max_length=1024)
+    author = models.ForeignKey(TestUser, verbose_name='Автор', on_delete=models.CASCADE)
+    pub_date = models.DateTimeField('Дата публикации', auto_now_add=True)
 
+    class Meta:
+        abstract = True
 
-class Comment(models.Model):
-  class Meta:
-    db_tbale = 'reviews_comment'
-    verbose_name = 'Комментарий'
-    verbose_name_plural = 'Комментарии'
-
-  def __str__(self) -> str:
-    return super().__str__()
+    def __str__(self) -> str:
+        return f'{self.author} - {self.text}'
 
 
-class Rating(models.Model):
-  class Meta:
-    db_tbale = 'reviews_rating'
-    verbose_name = 'Рейтинг'
-    verbose_name_plural = 'Рейтинги'
+class Review(BaseReviewModel):
+    score = models.PositiveSmallIntegerField('Оценка')
 
-  def __str__(self) -> str:
-    return super().__str__()
+    class Meta:
+        db_table = 'reviews_review'
+        verbose_name = 'Отзыв'
+        verbose_name_plural = 'Отзывы'
+
+
+class Comment(BaseReviewModel):
+    review = models.ForeignKey(Review, verbose_name='Отзыв', on_delete=models.CASCADE)
+
+    class Meta:
+        db_table = 'reviews_comment'
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
