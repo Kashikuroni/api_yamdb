@@ -38,7 +38,7 @@ class BaseReviewModel(models.Model):
 
 
 class Review(BaseReviewModel):
-    title = models.ForeignKey(
+    title = models.OneToOneField(
         Title,
         verbose_name='Произведение',
         on_delete=models.CASCADE
