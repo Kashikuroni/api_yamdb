@@ -1,30 +1,60 @@
+from django.contrib.auth import get_user_model
 from django.db import models
 
-class Review(models.Model):
-  class Meta:
-    db_tbale = 'reviews_review'
-    verbose_name = 'Отзыв'
-    verbose_name_plural = 'Отзывы'
-
-  def __str__(self) -> str:
-    return super().__str__()
+User = get_user_model()
 
 
-class Comment(models.Model):
-  class Meta:
-    db_tbale = 'reviews_comment'
-    verbose_name = 'Комментарий'
-    verbose_name_plural = 'Комментарии'
-
-  def __str__(self) -> str:
-    return super().__str__()
+class Title(models.Model):
+    class Meta:
+        db_table = 'reviews_title'
+        verbose_name = 'Произведение'
+        verbose_name_plural = 'Произведения'
 
 
-class Rating(models.Model):
-  class Meta:
-    db_tbale = 'reviews_rating'
-    verbose_name = 'Рейтинг'
-    verbose_name_plural = 'Рейтинги'
+class BaseReviewModel(models.Model):
+    text = models.CharField(
+        'Текст',
+        max_length=1024
+    )
+    author = models.ForeignKey(
+        User,
+        verbose_name='Автор',
+        on_delete=models.CASCADE
+    )
+    pub_date = models.DateTimeField(
+        'Дата публикации',
+        auto_now_add=True
+    )
 
-  def __str__(self) -> str:
-    return super().__str__()
+    class Meta:
+        abstract = True
+
+    def __str__(self) -> str:
+        return f'{self.author} - {self.text}'
+
+
+class Review(BaseReviewModel):
+    title = models.ForeignKey(
+        Title,
+        verbose_name='Произведение',
+        on_delete=models.CASCADE
+    )
+    score = models.PositiveSmallIntegerField('Оценка')
+
+    class Meta:
+        db_table = 'reviews_review'
+        verbose_name = 'Отзыв'
+        verbose_name_plural = 'Отзывы'
+
+
+class Comment(BaseReviewModel):
+    review = models.ForeignKey(
+        Review,
+        verbose_name='Отзыв',
+        on_delete=models.CASCADE
+    )
+
+    class Meta:
+        db_table = 'reviews_comment'
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
