@@ -3,6 +3,9 @@ from django.db import models
 class TestUser(models.Model):
     pass
 
+class Title(models.Model):
+    pass
+
 class BaseReviewModel(models.Model):
     text = models.CharField('Текст', max_length=1024)
     author = models.ForeignKey(TestUser, verbose_name='Автор', on_delete=models.CASCADE)
@@ -16,6 +19,7 @@ class BaseReviewModel(models.Model):
 
 
 class Review(BaseReviewModel):
+    title = models.ForeignKey(Title, verbose_name='Произведение', on_delete=models.CASCADE)
     score = models.PositiveSmallIntegerField('Оценка')
 
     class Meta:
