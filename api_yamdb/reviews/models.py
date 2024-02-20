@@ -1,15 +1,34 @@
+from django.contrib.auth import get_user_model
+from django.core.validators import (
+    MaxValueValidator, MinValueValidator
+)
+
 from django.db import models
 
-class TestUser(models.Model):
-    pass
+User = get_user_model()
+
 
 class Title(models.Model):
-    pass
+    class Meta:
+        db_table = 'reviews_title'
+        verbose_name = 'Произведение'
+        verbose_name_plural = 'Произведения'
+
 
 class BaseReviewModel(models.Model):
-    text = models.CharField('Текст', max_length=1024)
-    author = models.ForeignKey(TestUser, verbose_name='Автор', on_delete=models.CASCADE)
-    pub_date = models.DateTimeField('Дата публикации', auto_now_add=True)
+    text = models.CharField(
+        'Текст',
+        max_length=1024
+    )
+    author = models.ForeignKey(
+        User,
+        verbose_name='Автор',
+        on_delete=models.CASCADE
+    )
+    pub_date = models.DateTimeField(
+        'Дата публикации',
+        auto_now_add=True
+    )
 
     class Meta:
         abstract = True
@@ -19,8 +38,18 @@ class BaseReviewModel(models.Model):
 
 
 class Review(BaseReviewModel):
-    title = models.ForeignKey(Title, verbose_name='Произведение', on_delete=models.CASCADE)
-    score = models.PositiveSmallIntegerField('Оценка')
+    title = models.OneToOneField(
+        Title,
+        verbose_name='Произведение',
+        on_delete=models.CASCADE
+    )
+    score = models.PositiveSmallIntegerField(
+        'Оценка',
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(10)
+        ]
+    )
 
     class Meta:
         db_table = 'reviews_review'
@@ -29,7 +58,11 @@ class Review(BaseReviewModel):
 
 
 class Comment(BaseReviewModel):
-    review = models.ForeignKey(Review, verbose_name='Отзыв', on_delete=models.CASCADE)
+    review = models.ForeignKey(
+        Review,
+        verbose_name='Отзыв',
+        on_delete=models.CASCADE
+    )
 
     class Meta:
         db_table = 'reviews_comment'
