@@ -3,10 +3,29 @@ from rest_framework.serializers import (
     ModelSerializer, SlugRelatedField,
     CurrentUserDefault
 )
+from rest_framework import serializers
+
 from reviews.models import Review, Comment, Title
+from users.models import CustomUser
 
 
 User = get_user_model()
+
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=CustomUser.ROLE_CHOICES)
+
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'bio', 'role']
+
+    # Вызываем родительский метод, чтобы получить базовое представление объекта
+    # Затем изменяем значение поля role, чтобы отображалось значение роли CHICES вместо кода
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['role'] = instance.get_role_display()
+        return representation
+
 
 class BaseSerializer(ModelSerializer):
     author = SlugRelatedField(

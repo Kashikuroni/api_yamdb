@@ -6,6 +6,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'p&l%385148kslhtyn^##a1)ilz@4zqj=rq&agdol^##zgl9(vs'
 
+# Алгоритм шифрования для JWT-токенов
+JWT_ALGORITHM = 'HS256'
+
+# Время жизни токена в минутах
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -21,6 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'api.apps.ApiConfig',
     'reviews.apps.ReviewsConfig',
     'users.apps.UsersConfig',
@@ -106,3 +113,12 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = ((BASE_DIR / 'static/'),)
 
 AUTH_USER_MODEL = 'users.CustomUser'
+
+REST_FRAMEWORK = { 
+
+    'DEFAULT_PERMISSION_CLASSES': [ 
+
+        'rest_framework.permissions.IsAuthenticated', 
+
+    ],
+} 
