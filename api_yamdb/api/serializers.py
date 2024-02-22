@@ -51,6 +51,7 @@ class ReviewSerializer(BaseSerializer):
         fields = ('text', 'author', 'pub_date',
                   'title', 'score', 'id')
 
+
 # Аналогично обновляем CommentSerializer
 class CommentSerializer(BaseSerializer):
 
