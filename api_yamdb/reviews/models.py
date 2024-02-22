@@ -8,7 +8,60 @@ from django.db import models
 User = get_user_model()
 
 
+class BaseModel(models.Model):
+    name = models.CharField(
+        'Название',
+        max_length=256
+    )
+    slug = models.SlugField(
+        max_length=50,
+        unique=True
+    )
+
+    class Meta:
+        abstract = True
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Category(BaseModel):
+    class Meta:
+        db_table = 'reviews_category'
+        verbose_name = 'Категория'
+        verbose_name_plural = 'Категории'
+
+
+class Genre(BaseModel):
+    class Meta:
+        db_table = 'reviews_genre'
+        verbose_name = 'Жанр'
+        verbose_name_plural = 'Жанры'
+
+
 class Title(models.Model):
+    name = models.CharField(
+        'Название',
+        max_length=256
+    )
+    year = models.IntegerField('Год выпуска')
+    description = models.TextField(
+        'Описание',
+        blank=True
+    )
+    category = models.ForeignKey(
+        Category,
+        verbose_name='Категория',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    genre = models.ForeignKey(
+        Genre,
+        verbose_name='Жанр',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+
     class Meta:
         db_table = 'reviews_title'
         verbose_name = 'Произведение'
