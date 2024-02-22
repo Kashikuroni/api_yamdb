@@ -1,3 +1,6 @@
+import random
+import string
+
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
@@ -21,56 +24,39 @@ class CustomUserViewSet(viewsets.ViewSet):
     # НАДО БУДЕТ ЗАМЕНИТЬ НА СВОИ ПРЕМИШЕНЫ
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    # Генерируем код подтверждения
+    @staticmethod
+    def generate_confirmation_code(length=6):
+        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    
+    # Отправляем письмо с кодом подтверждения
+    @staticmethod
+    def send_confirmation_code(user, request):
+        mail_subject = 'Подтверждение регистрации'
+        message = f'Ваш код подтверждения {user.confirmation_code}.'
+        send_mail(mail_subject, message, 'segeiorlovlv@gmail.com', [user.email])
+
     # ПОДУМАТЬ О ЗАМЕНЕ ДЕКОРАТОРОВ
     @action(detail=False, methods=['post'])
     def signup(self, request):
         email = request.data.get('email')
         username = request.data.get('username')
-        password = request.data.get('password')
-
+        
         # Проверка наличия пользователя с указанным email
-        if CustomUser.objects.filter(email=email).exists():
-            return Response({'error': 'Пользователь с таким email уже существует'}, status=status.HTTP_400_BAD_REQUEST)
-
+        existing_user = CustomUser.objects.filter(email=email).exists()
+        if existing_user:
+            self.send_confirmation_code(existing_user, request)
+            return Response({'success': 'Письмо с кодом подтверждения отправлено на Ваш адрес электронной почты'})
+            
         # Создание нового пользователя
-        user = CustomUser.objects.create_user(email=email, username=username, password=password)
+        user = CustomUser.objects.create_user(email=email, username=username)
+        # Генерация кода подтверждения и сохранение его в модели пользователя
+        user.confirmation_code = self.generate_confirmation_code()
+        user.save()
 
         # Отправка письма с кодом подтверждения
-        current_site = get_current_site(request)
-        mail_subject = 'Подтверждение регистрации'
-        message = render_to_string('registration/confirmation_email.txt', {
-            'user': user,
-            'domain': current_site.domain,
-            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-            'token': default_token_generator.make_token(user),
-        })
-        send_mail(mail_subject, message, 'from@example.com', [user.email])
-
-        return Response({'success': 'Письмо с кодом подтверждения отправлено на ваш адрес электронной почты'})
-
-    # ПОДУМАТЬ О ЗАМЕНЕ ДЕКОРАТОРОВ
-    @action(detail=False, methods=['post'])
-    def resend_confirmation(self, request):
-        email = request.data.get('email')
-
-        # Проверка наличия пользователя с указанным email
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            return Response({'error': 'Пользователь с указанным email не найден'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Отправка письма с кодом подтверждения
-        current_site = get_current_site(request)
-        mail_subject = 'Повторное подтверждение регистрации'
-        message = render_to_string('registration/confirmation_email.txt', {
-            'user': user,
-            'domain': current_site.domain,
-            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-            'token': default_token_generator.make_token(user),
-        })
-        send_mail(mail_subject, message, 'from@example.com', [user.email])
-
-        return Response({'success': 'Письмо с кодом подтверждения отправлено на ваш адрес электронной почты'})
+        self.send_confirmation_code(user, request)
+        return Response({'success': 'Письмо с кодом подтверждения отправлено на Ваш адрес электронной почты'})
     
     @action(detail=False, methods=['get'])
     def list_all_users(self, request):

@@ -121,4 +121,12 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated', 
 
     ],
-} 
+}
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # SMTP-сервер вашего поставщика электронной почты
+EMAIL_PORT = 587  # Порт SMTP-сервера (обычно 587 для TLS)
+EMAIL_USE_TLS = True  # Использовать ли TLS для защиты соединения
+EMAIL_HOST_USER = 'sergeiorlovlv@gmail.com'  # Ваш адрес электронной почты
+EMAIL_HOST_PASSWORD = 'hbdihahjtrzbuklw'  # Пароль от вашего адреса электронной почты
+DEFAULT_FROM_EMAIL = 'sergeiorlovlv@gmail.com'  # Адрес электронной почты, от которого будут отправляться письма
