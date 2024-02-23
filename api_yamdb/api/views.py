@@ -3,9 +3,9 @@ from django.utils.crypto import get_random_string
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.core.exceptions import ObjectDoesNotExist
-from rest_framework.exceptions import PermissionDenied, NotAuthenticated
+from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from django.db.models import Q
+from rest_framework.request import Request
 
 from .serializers import SignUpSerializer, ObtainTokenSerializer, UserSerializer
 from .jwt_utils import create_access_token, decode_access_token
@@ -78,17 +78,34 @@ class ObtainTokenViewSet(viewsets.ModelViewSet):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
-
+    
     def create(self, request, *args, **kwargs):
+        # Проверяем наличие токена аутентификации
+        authorization_header = request.META.get('HTTP_AUTHORIZATION')
+        if not authorization_header:
+            raise AuthenticationFailed('Необходим JWT-токен')
 
-        if not request.user.is_authenticated:
-            raise NotAuthenticated('Необходим JWT-токен')
+        # Извлекаем токен из заголовка
+        token = authorization_header.split(' ')[1]
 
-        if not request.user.is_staff:
+        # Проверяем действительность токена
+        decoded_token = decode_access_token(token)
+        if 'error' in decoded_token:
+            raise AuthenticationFailed('Недействительный JWT-токен')
+
+        # Проверяем права доступа пользователя
+        username = decoded_token.get('sub')
+        if not self.is_user_staff(username):
             raise PermissionDenied('Нет прав доступа')
-        
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)  # Вызываем исключение, если данные невалидны
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def is_user_staff(self, username: str) -> bool:
+        try:
+            user = CustomUser.objects.get(username=username)
+            return user.is_staff
+        except CustomUser.DoesNotExist:
+            return False

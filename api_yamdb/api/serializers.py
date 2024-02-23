@@ -87,7 +87,7 @@ class ObtainTokenSerializer(serializers.ModelSerializer):
         return data
     
 class UserSerializer(serializers.ModelSerializer):
-    sername = serializers.CharField(
+    username = serializers.CharField(
         max_length=150,
         validators=[
             UniqueValidator(queryset=CustomUser.objects.all()),

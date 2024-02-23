@@ -10,7 +10,7 @@ SECRET_KEY = 'p&l%385148kslhtyn^##a1)ilz@4zqj=rq&agdol^##zgl9(vs'
 JWT_ALGORITHM = 'HS256'
 
 # Время жизни токена в минутах
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 600
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
