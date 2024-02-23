@@ -23,7 +23,9 @@ class SignUpViewSet(viewsets.ModelViewSet):
         existing_user = CustomUser.objects.filter(email=email, username=username).first()
         
         if existing_user:
-                confirmation_code = existing_user.confirmation_code
+                confirmation_code = get_random_string(length=6)
+                existing_user.confirmation_code = confirmation_code
+                existing_user.save()
                 self.send_confirmation_email(email, confirmation_code)
                 return Response({'message': 'Код подтверждения был отправлен на ваш email'}, status=status.HTTP_200_OK)
         
