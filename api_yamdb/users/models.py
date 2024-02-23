@@ -15,13 +15,14 @@ class CustomUser(AbstractUser):
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')
     confirmation_code = models.CharField(max_length=20, blank=True)
+    token = models.CharField(max_length=100, blank=True)
 
     def __str__(self):
         return self.username
 
-    def clean(self):
-        super().clean()
-        if self.username == 'me':
-            raise ValidationError(
-                'Использовать имя "me" в качестве username запрещено.'
-            )
+    # def clean(self):
+        # super().clean()
+        # if self.username == 'me':
+            #raise ValidationError(
+                # 'Использовать имя "me" в качестве username запрещено.'
+            # )
