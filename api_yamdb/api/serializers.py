@@ -25,10 +25,7 @@ class GenreSerializer(ModelSerializer):
 
 
 class TitleSerializer(ModelSerializer):
-    genre = SlugRelatedField(
-        queryset=Genre.objects.all(),
-        slug_field='slug'
-    )
+    genre = GenreSerializer(required=False, many=True)
     category = SlugRelatedField(
         queryset=Category.objects.all(),
         slug_field='slug'
