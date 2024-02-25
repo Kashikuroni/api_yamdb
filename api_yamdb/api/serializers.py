@@ -16,7 +16,6 @@ from users.models import CustomUser
 
 
 class SignUpSerializer(serializers.ModelSerializer):
-    confirmation_code = serializers.CharField(max_length=20, required=False)
     username = serializers.CharField(
         max_length=150,
         validators=[
@@ -30,10 +29,10 @@ class SignUpSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'username', 'confirmation_code']
+        fields = ['email', 'username']
 
     # Вызываем родительский метод, чтобы получить базовое представление объекта
-    # Затем изменяем значение поля role, чтобы отображалось значение роли CHICES вместо кода
+    # Затем изменяем значение поля role, чтобы отображалось значение роли CHOICES вместо кода
     # def to_representation(self, instance):
         # representation = super().to_representation(instance)
         # representation['role'] = instance.get_role_display()
@@ -62,29 +61,12 @@ class SignUpSerializer(serializers.ModelSerializer):
         return data
     
 
-class ObtainTokenSerializer(serializers.ModelSerializer):
+# class ObtainTokenSerializer(serializers.ModelSerializer):
     
-    class Meta:
-        model = CustomUser
-        fields = ['username', 'confirmation_code']
-    
-    def validate(self, data):
-        # Проверяем наличие username и confirmation_code в данных
-        username = data.get('username')
-        confirmation_code = data.get('confirmation_code')
+    # class Meta:
+        # model = CustomUser
+        # fields = ['username', 'confirmation_code']
 
-        if not username or not confirmation_code:
-            raise serializers.ValidationError({'error': 'Отсутствует обязательное поле username или confirmation_code'})
-
-        # Проверяем длину поля onfirmation_code
-        if len(confirmation_code) > 6:
-            raise serializers.ValidationError({'error': 'Длина поля confirmation_code не должна превышать 254 символа'})
-
-        # Проверяем длину поля username
-        if len(username) > 150:
-            raise serializers.ValidationError({'error': 'Длина поля username не должна превышать 150 символов'})
-
-        return data
     
 class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
@@ -104,6 +86,13 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {
         'role': {'required': False}
     }
+    
+    # Вызываем родительский метод, чтобы получить базовое представление объекта
+    # Затем изменяем значение поля role, чтобы отображалось значение роли CHOICES вместо кода
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['role'] = instance.get_role_display()
+        return representation
    
     def validate(self, data):
         # Проверяем наличие email и username в данных
@@ -124,11 +113,11 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'error': 'Длина поля username не должна превышать 150 символов'})
         
         # Проверяем длину поля first_name
-        if len(first_name) > 150:
+        if first_name and len(first_name) > 150:
             raise serializers.ValidationError({'error': 'Длина поля first_name не должна превышать 150 символов'})
-            
+        
         # Проверяем длину поля last_name
-        if len(last_name) > 150:
+        if last_name and len(last_name) > 150:
             raise serializers.ValidationError({'error': 'Длина поля last_name не должна превышать 150 символов'})
 
         return data

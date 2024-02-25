@@ -1,14 +1,18 @@
+import re
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.exceptions import ValidationError
 from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.request import Request
 
-from .serializers import SignUpSerializer, ObtainTokenSerializer, UserSerializer
-from .jwt_utils import create_access_token, decode_access_token
+from .serializers import SignUpSerializer, UserSerializer
+from .jwt_utils import create_access_token
+from .permissions import IsAdmin
 from users.models import CustomUser
 
 class SignUpViewSet(viewsets.ModelViewSet):
@@ -52,60 +56,50 @@ class SignUpViewSet(viewsets.ModelViewSet):
             fail_silently=False,
         )
 
-class ObtainTokenViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
-    serializer_class = ObtainTokenSerializer
+class ObtainTokenAPIView(APIView):
     
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
+        # Получаем данные из запроса
         username = request.data.get('username')
         confirmation_code = request.data.get('confirmation_code')
-
+        
+        if not (username and confirmation_code):
+            return Response({'error': 'Отсутствует имя пользователя или подтверждающий код'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            user = CustomUser.objects.get(username=username, confirmation_code=confirmation_code)
-        except ObjectDoesNotExist:
+            user = CustomUser.objects.get(username=username)
+        except CustomUser.DoesNotExist:
             return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Создаем или получаем токен
+        
+        if user.confirmation_code != confirmation_code:
+            return Response({'error': 'Неверный подтверждающий код'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Создаем токен
         token = create_access_token(username)
-
+        
         # Сохраняем токен в модели пользователя
         user.token = token
         user.save()
-
+        
         return Response({'token': token}, status=status.HTTP_200_OK)
                 
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
+    permission_classes = [IsAdmin]
     
     def create(self, request, *args, **kwargs):
-        # Проверяем наличие токена аутентификации
-        authorization_header = request.META.get('HTTP_AUTHORIZATION')
-        if not authorization_header:
-            raise AuthenticationFailed('Необходим JWT-токен')
-
-        # Извлекаем токен из заголовка
-        token = authorization_header.split(' ')[1]
-
-        # Проверяем действительность токена
-        decoded_token = decode_access_token(token)
-        if 'error' in decoded_token:
-            raise AuthenticationFailed('Недействительный JWT-токен')
-
-        # Проверяем права доступа пользователя
-        username = decoded_token.get('sub')
-        if not self.is_user_staff(username):
-            raise PermissionDenied('Нет прав доступа')
-
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # Вызываем исключение, если данные невалидны
-        self.perform_create(serializer)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def is_user_staff(self, username: str) -> bool:
-        try:
-            user = CustomUser.objects.get(username=username)
-            return user.is_staff
-        except CustomUser.DoesNotExist:
-            return False
+        if serializer.is_valid():
+            role = serializer.validated_data.get('role')
+            if role == 'admin':
+                # Создаем пользователя с ролью "admin" и правами администратора
+                user = serializer.save()
+                user.is_staff = True
+                user.save()
+            else:
+                serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
