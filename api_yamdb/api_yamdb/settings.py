@@ -6,6 +6,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'p&l%385148kslhtyn^##a1)ilz@4zqj=rq&agdol^##zgl9(vs'
 
+# Алгоритм шифрования для JWT-токенов
+JWT_ALGORITHM = 'HS256'
+
+# Время жизни токена в минутах
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 600
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -21,6 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'api.apps.ApiConfig',
     'reviews.apps.ReviewsConfig',
     'users.apps.UsersConfig',
@@ -106,3 +113,22 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 STATICFILES_DIRS = ((BASE_DIR / 'static/'),)
+
+AUTH_USER_MODEL = 'users.CustomUser'
+
+REST_FRAMEWORK = { 
+
+    'DEFAULT_PERMISSION_CLASSES': [ 
+
+        'rest_framework.permissions.AllowAny', 
+
+    ],
+}
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # SMTP-сервер вашего поставщика электронной почты
+EMAIL_PORT = 587  # Порт SMTP-сервера (обычно 587 для TLS)
+EMAIL_USE_TLS = True  # Использовать ли TLS для защиты соединения
+EMAIL_HOST_USER = 'sergeiorlovlv@gmail.com'  # Ваш адрес электронной почты
+EMAIL_HOST_PASSWORD = 'hbdihahjtrzbuklw'  # Пароль от вашего адреса электронной почты
+DEFAULT_FROM_EMAIL = 'sergeiorlovlv@gmail.com'  # Адрес электронной почты, от которого будут отправляться письма

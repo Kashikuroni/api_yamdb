@@ -208,6 +208,7 @@ class Test00UserRegistration:
         request_method = 'POST'
         users_count = django_user_model.objects.count()
         response = admin_client.post(self.URL_ADMIN_CREATE_USER, data=data)
+
         assert response.status_code == HTTPStatus.BAD_REQUEST, (
             messege[0].format(
                 url=self.URL_ADMIN_CREATE_USER, request_method=request_method
