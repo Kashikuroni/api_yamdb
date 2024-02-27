@@ -1,8 +1,23 @@
-
-from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .serializers import TitleSerializer, CategorySerializer, GenreSerializer
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
+from django.shortcuts import get_object_or_404
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import filters, pagination, viewsets, filters
 
+from api.jwt_utils import create_access_token
+from api.permissions import AllAuthPermission, AdminPermission
+from api.serializers import (
+    SignUpSerializer,
+    UserSerializer,
+    TitleSerializer,
+    CategorySerializer,
+    GenreSerializer,
+    UserMeSerializer
+)
+from users.models import CustomUser
 from reviews.models import Title, Category, Genre
 
 
@@ -29,21 +44,6 @@ class GenreViewSet(viewsets.ModelViewSet):
 
 class ReviewViewSet(viewsets.ModelViewSet):
     pass
-
-import re
-from django.core.mail import send_mail
-from django.utils.crypto import get_random_string
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework import filters
-from rest_framework import pagination
-
-from .serializers import SignUpSerializer, UserSerializer, UserMeSerializer
-from .jwt_utils import create_access_token
-from .permissions import AllAuthPermission, AdminPermission
-from users.models import CustomUser
 
 
 class SignUpViewSet(viewsets.ModelViewSet):

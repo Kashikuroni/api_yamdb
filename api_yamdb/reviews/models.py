@@ -59,8 +59,6 @@ class Title(models.Model):
         Genre,
         through='GenreTitle',
         verbose_name='Жанр',
-        on_delete=models.SET_NULL,
-        null=True
     )
 
     class Meta:

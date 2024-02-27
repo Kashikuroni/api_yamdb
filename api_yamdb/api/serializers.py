@@ -10,12 +10,13 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.core.validators import RegexValidator
 
-from reviews.models import Review, Comment, Title, Category, Genre
+from reviews.models import Review, Title, Category, Genre
 
 from users.models import CustomUser
 import datetime as dt
 
-# User = get_user_model()
+User = get_user_model()
+
 
 class CategorySerializer(ModelSerializer):
     class Meta:
@@ -55,13 +56,11 @@ class TitleSerializer(ModelSerializer):
 
 class BaseSerializer(ModelSerializer):
     author = SlugRelatedField(
-        queryset=User.objects.all(),
         default=CurrentUserDefault(),
         slug_field='username',
         read_only=True
-      
-      
-class SignUpSerializer(serializers.ModelSerializer):
+    )
+
 
 class BaseUserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
@@ -97,12 +96,10 @@ class BaseUserSerializer(serializers.ModelSerializer):
         first_name = data.get('first_name')
         last_name = data.get('last_name')
 
-        if not self.partial:
-            if not email or not username:
-                raise serializers.ValidationError(
-                    {'error': ('Отсутствует обязательное поле '
-                               'email или username')}
-                )
+        if not self.partial and (not email or not username):
+            raise serializers.ValidationError(
+                {'error': ('Отсутствует обязательное поле email или username')}
+            )
 
         if email and len(email) > 254:
             raise serializers.ValidationError(
@@ -157,6 +154,7 @@ class UserSerializer(BaseUserSerializer):
             'last_name',
             'bio', 'role'
         ]
+
 
 class UserMeSerializer(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
