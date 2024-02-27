@@ -1,41 +1,157 @@
-from django.contrib.auth import get_user_model
+# from django.contrib.auth import get_user_model
 from rest_framework.serializers import (
     ModelSerializer, SlugRelatedField,
     CurrentUserDefault
 )
+from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
+from django.core.validators import RegexValidator
+
+
 from reviews.models import Review, Comment, Title
+from users.models import CustomUser
 
 
-User = get_user_model()
+# User = get_user_model()
 
-class BaseSerializer(ModelSerializer):
-    author = SlugRelatedField(
-        queryset=User.objects.all(),
-        default=CurrentUserDefault(),
-        slug_field='username',
-        read_only=True
+
+class SignUpSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        max_length=150,
+        validators=[
+            UniqueValidator(queryset=CustomUser.objects.all()),
+            RegexValidator(
+                regex=r'^[\w.@+-]+$',
+                message='Поле username должно содержать только буквы, цифры и следующие символы: @ . + -',
+            )
+        ]
     )
 
     class Meta:
-        abstract = True
-        read_only_fields = ('author', 'pub_date', 'id')
+        model = CustomUser
+        fields = ['email', 'username']
 
+    # Вызываем родительский метод, чтобы получить базовое представление объекта
+    # Затем изменяем значение поля role, чтобы отображалось значение роли CHOICES вместо кода
+    # def to_representation(self, instance):
+        # representation = super().to_representation(instance)
+        # representation['role'] = instance.get_role_display()
+        # return representation
+    
+    def validate(self, data):
+        # Проверяем наличие email и username в данных
+        email = data.get('email')
+        username = data.get('username')
+        if not email or not username:
+            raise serializers.ValidationError({'error': 'Отсутствует обязательное поле email или username'})
 
-class ReviewSerializer(BaseSerializer):
-    title = SlugRelatedField(
-        queryset=Title.objects.all(),
-        slug_field='name'
+        # Проверяем длину поля email
+        if len(email) > 254:
+            raise serializers.ValidationError({'error': 'Длина поля email не должна превышать 254 символа'})
+
+        # Проверяем длину поля username
+        if len(username) > 150:
+            raise serializers.ValidationError({'error': 'Длина поля username не должна превышать 150 символов'})
+        
+        # Проверяем значение поля username
+        username = data.get('username')
+        if username == 'me':
+            raise serializers.ValidationError({'error': 'Недопустимое значение для имени пользователя'})
+
+        return data
+    
+
+# class ObtainTokenSerializer(serializers.ModelSerializer):
+    
+    # class Meta:
+        # model = CustomUser
+        # fields = ['username', 'confirmation_code']
+
+    
+class UserSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        max_length=150,
+        validators=[
+            UniqueValidator(queryset=CustomUser.objects.all()),
+            RegexValidator(
+                regex=r'^[\w.@+-]+$',
+                message='Поле username должно содержать только буквы, цифры и следующие символы: @ . + -',
+            )
+        ]
     )
 
-    class Meta(BaseSerializer.Meta):
-        model = Review
-        fields = ('text', 'author', 'pub_date',
-                  'title', 'score', 'id')
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'username', 'first_name', 'last_name', 'bio', 'role']
+        extra_kwargs = {
+        'role': {'required': False}
+    }
+    
+    # Вызываем родительский метод, чтобы получить базовое представление объекта
+    # Затем изменяем значение поля role, чтобы отображалось значение роли CHOICES вместо кода
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['role'] = instance.get_role_display()
+        return representation
+   
+    def validate(self, data):
+        # Проверяем наличие email и username в данных
+        email = data.get('email')
+        username = data.get('username')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+
+        if not email or not username:
+            raise serializers.ValidationError({'error': 'Отсутствует обязательное поле email или username'})
+
+        # Проверяем длину поля email
+        if len(email) > 254:
+            raise serializers.ValidationError({'error': 'Длина поля email не должна превышать 254 символа'})
+
+        # Проверяем длину поля username
+        if len(username) > 150:
+            raise serializers.ValidationError({'error': 'Длина поля username не должна превышать 150 символов'})
+        
+        # Проверяем длину поля first_name
+        if first_name and len(first_name) > 150:
+            raise serializers.ValidationError({'error': 'Длина поля first_name не должна превышать 150 символов'})
+        
+        # Проверяем длину поля last_name
+        if last_name and len(last_name) > 150:
+            raise serializers.ValidationError({'error': 'Длина поля last_name не должна превышать 150 символов'})
+
+        return data
+
+
+# class BaseSerializer(ModelSerializer):
+    # author = SlugRelatedField(
+        # queryset=User.objects.all(),
+        # default=CurrentUserDefault(),
+        # slug_field='username',
+        # read_only=True
+    # )
+
+    # class Meta:
+        # abstract = True
+        # read_only_fields = ('author', 'pub_date', 'id')
+
+
+# class ReviewSerializer(BaseSerializer):
+    # title = SlugRelatedField(
+        # queryset=Title.objects.all(),
+        # slug_field='name'
+    # )
+
+    # class Meta(BaseSerializer.Meta):
+        # model = Review
+        # fields = ('text', 'author', 'pub_date',
+                  # 'title', 'score', 'id')
+
 
 # Аналогично обновляем CommentSerializer
-class CommentSerializer(BaseSerializer):
+# class CommentSerializer(BaseSerializer):
 
-    class Meta(BaseSerializer.Meta):
-        model = Comment
-        fields = ('text', 'author', 'pub_date',
-                  'review', 'id')
+    # class Meta(BaseSerializer.Meta):
+        # model = Comment
+        # fields = ('text', 'author', 'pub_date',
+                  # 'review', 'id')
