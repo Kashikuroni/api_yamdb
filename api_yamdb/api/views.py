@@ -1,3 +1,4 @@
+
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from .serializers import TitleSerializer, CategorySerializer, GenreSerializer
@@ -32,19 +33,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
 import re
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.core.exceptions import ObjectDoesNotExist
-from rest_framework.exceptions import ValidationError
-from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework.request import Request
+from rest_framework import filters
+from rest_framework import pagination
 
-from .serializers import SignUpSerializer, UserSerializer
+from .serializers import SignUpSerializer, UserSerializer, UserMeSerializer
 from .jwt_utils import create_access_token
-from .permissions import IsAdmin
+from .permissions import AllAuthPermission, AdminPermission
 from users.models import CustomUser
+
 
 class SignUpViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
@@ -55,15 +55,22 @@ class SignUpViewSet(viewsets.ModelViewSet):
         username = request.data.get('username')
 
         # Проверяем, существует ли уже пользователь с таким email и username
-        existing_user = CustomUser.objects.filter(email=email, username=username).first()
-        
+        existing_user = CustomUser.objects.filter(
+            email=email,
+            username=username
+        ).first()
+
         if existing_user:
-                confirmation_code = get_random_string(length=6)
-                existing_user.confirmation_code = confirmation_code
-                existing_user.save()
-                self.send_confirmation_email(email, confirmation_code)
-                return Response({'message': 'Код подтверждения был отправлен на ваш email'}, status=status.HTTP_200_OK)
-        
+            confirmation_code = get_random_string(length=6)
+            existing_user.confirmation_code = confirmation_code
+            existing_user.save()
+            self.send_confirmation_email(email, confirmation_code)
+            return Response(
+                {'message': ('Код подтверждения '
+                             'был отправлен на ваш email')},
+                status=status.HTTP_200_OK
+            )
+
         # Если пользователь не найден, пробуем создать нового
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -74,7 +81,10 @@ class SignUpViewSet(viewsets.ModelViewSet):
             self.send_confirmation_email(email, confirmation_code)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     def send_confirmation_email(self, email, confirmation_code):
         subject = 'Код подтверждения регистрации'
@@ -82,44 +92,80 @@ class SignUpViewSet(viewsets.ModelViewSet):
         send_mail(
             subject,
             message,
-            'sergeiorlovlv@gmail.com',  # Замените на свой адрес электронной почты
+            # Замените на свой адрес электронной почты
+            'sergeiorlovlv@gmail.com',
             [email],
             fail_silently=False,
         )
 
+
 class ObtainTokenAPIView(APIView):
-    
+
     def post(self, request, *args, **kwargs):
         # Получаем данные из запроса
         username = request.data.get('username')
         confirmation_code = request.data.get('confirmation_code')
-        
+
         if not (username and confirmation_code):
-            return Response({'error': 'Отсутствует имя пользователя или подтверждающий код'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {'error': ('Отсутствует имя пользователя '
+                           'или подтверждающий код')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             user = CustomUser.objects.get(username=username)
         except CustomUser.DoesNotExist:
-            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
-        
+            return Response(
+                {'error': 'Пользователь не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         if user.confirmation_code != confirmation_code:
-            return Response({'error': 'Неверный подтверждающий код'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {'error': 'Неверный подтверждающий код'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Создаем токен
         token = create_access_token(username)
-        
+
         # Сохраняем токен в модели пользователя
         user.token = token
         user.save()
-        
+
         return Response({'token': token}, status=status.HTTP_200_OK)
-                
+
+
+class UserMeAPIView(APIView):
+    # Используем свой класс разрешений
+    permission_classes = [AllAuthPermission]
+
+    def get(self, request):
+        # Получаем текущего аутентифицированного пользователя
+        user = request.user
+        serializer = UserMeSerializer(user)  # Сериализуем пользователя
+        return Response(serializer.data)  # Возвращаем данные пользователя
+
+    def patch(self, request):
+        # Получаем текущего аутентифицированного пользователя
+        user = request.user
+        # Обновляем данные пользователя
+        serializer = UserMeSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdmin]
-    
+    permission_classes = [AdminPermission]  # Используем свой класс разрешений
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['username']
+    pagination_class = pagination.PageNumberPagination
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -133,4 +179,60 @@ class UserViewSet(viewsets.ModelViewSet):
                 serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            paginator = self.pagination_class()
+            data = {
+                'count': paginator.page.paginator.count,
+                'next': (paginator.get_next_link()
+                         if paginator.get_next_link() else None),
+                'previous': (paginator.get_previous_link()
+                             if paginator.get_previous_link() else None),
+                'results': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {
+                'count': queryset.count(),
+                'next': None, 'previous': None,
+                'results': serializer.data
+            }, status=status.HTTP_200_OK
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        queryset = CustomUser.objects.filter(username=kwargs['pk'])
+        user = get_object_or_404(queryset)
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        user = get_object_or_404(queryset, username=kwargs['pk'])
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        else:
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        user = get_object_or_404(queryset, username=kwargs['pk'])
+        self.perform_destroy(user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
