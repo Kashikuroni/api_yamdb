@@ -322,6 +322,7 @@ class Test01UserAPI:
         response = admin_client.patch(
             f'{self.USERS_URL}{user.username}/', data=data
         )
+
         assert response.status_code == HTTPStatus.OK, (
             'Если PATCH-запрос администратора, отправленный к '
             f'`{self.USERS_URL}'
@@ -409,6 +410,7 @@ class Test01UserAPI:
         response = admin_client.put(
             f'{self.USERS_URL}{user.username}/', data=self.PATCH_DATA
         )
+        print(response.data)  # Вывод ответа сервера для отладки
         assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED, (
             f'Проверьте, что PUT-запрос к `{self.USERS_URL}'
             '{username}/` не предусмотрен и возвращает статус 405.'

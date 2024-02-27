@@ -10,7 +10,7 @@ SECRET_KEY = 'p&l%385148kslhtyn^##a1)ilz@4zqj=rq&agdol^##zgl9(vs'
 JWT_ALGORITHM = 'HS256'
 
 # Время жизни токена в минутах
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 600
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 6000
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -114,12 +114,18 @@ STATICFILES_DIRS = ((BASE_DIR / 'static/'),)
 
 AUTH_USER_MODEL = 'users.CustomUser'
 
-REST_FRAMEWORK = { 
+REST_FRAMEWORK = {
 
-    'DEFAULT_PERMISSION_CLASSES': [ 
+    'DEFAULT_PERMISSION_CLASSES': [
 
-        'rest_framework.permissions.AllowAny', 
+        'rest_framework.permissions.AllowAny',
 
+    ],
+
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Другие классы аутентификации, если необходимо
     ],
 }
 
