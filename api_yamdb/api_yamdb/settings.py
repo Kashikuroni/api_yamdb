@@ -128,6 +128,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         # Другие классы аутентификации, если необходимо
     ],
+    'PAGE_SIZE': 20,
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

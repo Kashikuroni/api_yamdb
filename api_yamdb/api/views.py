@@ -16,7 +16,7 @@ from api.serializers import (
     ReviewSerializer, CommentSerializer
 )
 from users.models import CustomUser
-from reviews.models import Title, Category, Genre
+from reviews.models import Title, Category
 
 
 class SignUpViewSet(viewsets.ModelViewSet):
