@@ -76,6 +76,7 @@ class GenreTitle(models.Model):
 
 
 class BaseReviewModel(models.Model):
+    """Базовая абстрактная модель для Отзывов и Комментарием."""
     text = models.CharField(
         'Текст',
         max_length=1024
@@ -98,6 +99,7 @@ class BaseReviewModel(models.Model):
 
 
 class Review(BaseReviewModel):
+    """Модель отзывов."""
     title = models.OneToOneField(
         Title,
         verbose_name='Произведение',
