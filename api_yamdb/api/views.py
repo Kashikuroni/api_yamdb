@@ -274,9 +274,10 @@ class GenreViewSet(viewsets.ModelViewSet):
 class ReviewViewSet(viewsets.ModelViewSet):
     """Обработка запросов по отзывам."""
     serializer_class = ReviewSerializer
+    pagination_class = PageNumberPagination
 
 
 class CommentViewSet(viewsets.ModelViewSet):
     """Обработка запросов по комментариям."""
     serializer_class = CommentSerializer
-
+    pagination_class = PageNumberPagination

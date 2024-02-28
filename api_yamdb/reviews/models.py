@@ -100,7 +100,7 @@ class BaseReviewModel(models.Model):
 
 class Review(BaseReviewModel):
     """Модель отзывов."""
-    title = models.OneToOneField(
+    title = models.ForeignKey(
         Title,
         verbose_name='Произведение',
         on_delete=models.CASCADE
@@ -120,6 +120,7 @@ class Review(BaseReviewModel):
 
 
 class Comment(BaseReviewModel):
+    """Модель комментарием."""
     review = models.ForeignKey(
         Review,
         verbose_name='Отзыв',
