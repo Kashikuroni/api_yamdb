@@ -19,7 +19,7 @@ from api.serializers import (
     UserMeSerializer
 )
 from users.models import CustomUser
-from reviews.models import Title, Category
+from reviews.models import Genre, Title, Category
 
 
 class TitleViewSet(viewsets.ModelViewSet):
@@ -32,17 +32,16 @@ class TitleViewSet(viewsets.ModelViewSet):
 
 def check_permissions(view_func):
     def check_view(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
+        if request.user.is_authenticated:
+            if request.user.role != 'admin':
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        else:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
-        if request.user.role != 'admin':
-            return Response(status=status.HTTP_403_FORBIDDEN)
         return view_func(self, request, *args, **kwargs)
     return check_view
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.order_by('id')
-    serializer_class = CategorySerializer
+class BaseViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ('name',)
     pagination_class = PageNumberPagination
@@ -71,15 +70,20 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     @check_permissions
     def destroy(self, request, *args, **kwargs):
+        if request.user.is_authenticated and request.user.role == 'admin':
+            self.get_object().delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
         return super().destroy(request, *args, **kwargs)
 
 
-class GenreViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(BaseViewSet):
     queryset = Category.objects.order_by('id')
+    serializer_class = CategorySerializer
+
+
+class GenreViewSet(BaseViewSet):
+    queryset = Genre.objects.order_by('id')
     serializer_class = GenreSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ('name',)
-    pagination_class = PageNumberPagination
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
