@@ -152,7 +152,10 @@ class TitleSerializer(ModelSerializer):
 
     def get_rating(self, obj):
         scores = Review.objects.filter(title__name=obj.name)
-        return scores.aggregate(Avg('score'))
+        avg_score = scores.aggregate(Avg('score'))['score__avg']
+        if avg_score is not None:
+            return int(round(avg_score))
+        return None
 
     def validate_year(self, value):
         if value > dt.datetime.now().year:
@@ -172,20 +175,19 @@ class BaseReviewSerializer(ModelSerializer):
         read_only=True
     )
 
-    class Meta:
-        fields = ('text', 'author', 'pub_date')
-
 
 class ReviewSerializer(BaseReviewSerializer):
     """Сериализация для отзывов."""
 
     class Meta:
         model = Review
-        fields = ('title', 'score')
+        fields = ('id', 'title', 'score', 'text', 'author', 'pub_date')
+        read_only_fields = ('id', 'title',)
 
 
 class CommentSerializer(BaseReviewSerializer):
     """Сериализация для отзывов."""
     class Meta:
         model = Comment
-        fields = ('review',)
+        fields = ('id', 'review', 'text', 'author', 'pub_date')
+        read_only_fields = ('id', 'review',)
