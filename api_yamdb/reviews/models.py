@@ -124,7 +124,8 @@ class Comment(BaseReviewModel):
     review = models.ForeignKey(
         Review,
         verbose_name='Отзыв',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name='comments'
     )
     author = models.ForeignKey(
         User,

@@ -8,16 +8,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import filters, pagination, viewsets
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 
 from api.jwt_utils import create_access_token
-from api.permissions import AllAuthPermission, AdminPermission
+from api.permissions import (
+    AllAuthPermission, AdminPermission,
+    author_or_admin_permission
+)
 from api.serializers import (
     SignUpSerializer, UserSerializer, UserMeSerializer,
     TitleSerializer, CategorySerializer, GenreSerializer,
     ReviewSerializer, CommentSerializer
 )
 from users.models import CustomUser
-from reviews.models import Title, Category, Review, Comment
+from reviews.models import Title, Category, Review
 
 
 class SignUpViewSet(viewsets.ModelViewSet):
@@ -272,6 +276,21 @@ class GenreViewSet(viewsets.ModelViewSet):
     pagination_class = PageNumberPagination
 
 
+def edit_permissions(view_func):
+    """
+    Декоратор для проверки:
+    Авторизации, Авторства, Админ или Модератор.
+    """
+    def check_view(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        if (request.user.role not in ('admin', 'moderator')
+                and self.get_object().author != self.request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return view_func(self, request, *args, **kwargs)
+    return check_view
+
+
 class ReviewViewSet(viewsets.ModelViewSet):
     """Обработка запросов по отзывам."""
     serializer_class = ReviewSerializer
@@ -281,37 +300,28 @@ class ReviewViewSet(viewsets.ModelViewSet):
         'head', 'options', 'trace'
     ]
 
+    def get_permissions(self):
+        if self.request.method not in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         title = get_object_or_404(Title, pk=self.kwargs['title_id'])
         return title.reviews.all().order_by('id')
 
     def create(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
         try:
             return super().create(request, *args, **kwargs)
         except IntegrityError:
             return Response({'error': 'Вы уже оставили свой отзыв'},
                             status=status.HTTP_400_BAD_REQUEST)
 
+    @author_or_admin_permission
     def partial_update(self, request, *args, **kwargs):
-        review = self.get_object()
-        if not request.user.is_authenticated:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        if review.author == self.request.user:
-            return super().partial_update(request, *args, **kwargs)
-        if request.user.role not in ('admin', 'moderator'):
-            return Response(status=status.HTTP_403_FORBIDDEN)
         return super().partial_update(request, *args, **kwargs)
 
+    @author_or_admin_permission
     def destroy(self, request, *args, **kwargs):
-        review = self.get_object()
-        if not request.user.is_authenticated:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        if review.author == self.request.user:
-            return super().destroy(request, *args, **kwargs)
-        if request.user.role not in ('admin', 'moderator'):
-            return Response(status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
@@ -323,10 +333,37 @@ class CommentViewSet(viewsets.ModelViewSet):
     """Обработка запросов по комментариям."""
     serializer_class = CommentSerializer
     pagination_class = PageNumberPagination
+    http_method_names = [
+        'get', 'post', 'patch', 'delete',
+        'head', 'options', 'trace'
+    ]
+
+    def get_permissions(self):
+        if self.request.method not in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def get_queryset(self):
         review = get_object_or_404(Review, pk=self.kwargs['review_id'])
-        return review.comments.all()
+        return review.comments.all().order_by('id')
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response({'error': 'Вы уже оставили свой отзыв'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @author_or_admin_permission
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @author_or_admin_permission
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         review = get_object_or_404(Review, pk=self.kwargs['review_id'])

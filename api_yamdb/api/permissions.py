@@ -1,4 +1,5 @@
 from rest_framework.permissions import BasePermission
+from rest_framework import response, status
 
 
 class AllAuthPermission(BasePermission):
@@ -26,3 +27,12 @@ class AdminPermission(BasePermission):
                 request.user.is_staff
                 or request.user.role == 'admin')
         )
+
+
+def author_or_admin_permission(func):
+    def check_view(self, request, *args, **kwargs):
+        if (request.user.role in ('admin', 'moderator')
+                or self.get_object().author == self.request.user):
+            return func(self, request, *args, **kwargs)
+        return response.Response(status=status.HTTP_403_FORBIDDEN)
+    return check_view
