@@ -76,14 +76,10 @@ class GenreTitle(models.Model):
 
 
 class BaseReviewModel(models.Model):
+    """Базовая абстрактная модель для Отзывов и Комментарием."""
     text = models.CharField(
         'Текст',
         max_length=1024
-    )
-    author = models.ForeignKey(
-        User,
-        verbose_name='Автор',
-        on_delete=models.CASCADE
     )
     pub_date = models.DateTimeField(
         'Дата публикации',
@@ -93,15 +89,14 @@ class BaseReviewModel(models.Model):
     class Meta:
         abstract = True
 
-    def __str__(self) -> str:
-        return f'{self.author} - {self.text}'
-
 
 class Review(BaseReviewModel):
-    title = models.OneToOneField(
+    """Модель отзывов."""
+    title = models.ForeignKey(
         Title,
         verbose_name='Произведение',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name='reviews'
     )
     score = models.PositiveSmallIntegerField(
         'Оценка',
@@ -110,21 +105,36 @@ class Review(BaseReviewModel):
             MaxValueValidator(10)
         ]
     )
-
-    class Meta:
-        db_table = 'reviews_review'
-        verbose_name = 'Отзыв'
-        verbose_name_plural = 'Отзывы'
-
-
-class Comment(BaseReviewModel):
-    review = models.ForeignKey(
-        Review,
-        verbose_name='Отзыв',
-        on_delete=models.CASCADE
+    author = models.ForeignKey(
+        User,
+        verbose_name='Автор',
+        on_delete=models.CASCADE,
+        related_name='reviews_authors'
     )
 
     class Meta:
-        db_table = 'reviews_comment'
+        db_table = 'reviews'
+        verbose_name = 'Отзыв'
+        verbose_name_plural = 'Отзывы'
+        unique_together = ('author', 'title')
+
+
+class Comment(BaseReviewModel):
+    """Модель комментарием."""
+    review = models.ForeignKey(
+        Review,
+        verbose_name='Отзыв',
+        on_delete=models.CASCADE,
+        related_name='comments'
+    )
+    author = models.ForeignKey(
+        User,
+        verbose_name='Автор',
+        on_delete=models.CASCADE,
+        related_name='comments_authors'
+    )
+
+    class Meta:
+        db_table = 'reviews_comments'
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
