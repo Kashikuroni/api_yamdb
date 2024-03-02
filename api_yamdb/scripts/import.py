@@ -1,8 +1,7 @@
 import csv
-from pprint import pprint as pp
 
 from django.contrib.auth import get_user_model
-from django.db import connection, transaction
+from django.db import transaction
 from django.conf import settings
 
 from reviews.models import Genre, Category, Title, Review, GenreTitle, Comment
@@ -29,10 +28,6 @@ def run():
     import_review('review.csv')
     import_comments('comments.csv')
     import_genre_title('genre_title.csv')
-    pp(connection.queries)
-    pp(len(connection.queries))
-    total_time = sum(float(query['time']) for query in connection.queries)
-    print(f"Общее время выполнения запросов: {total_time} секунд")
 
 
 def import_users(file_name: str) -> None:

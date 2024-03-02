@@ -268,25 +268,10 @@ class UserViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            paginator = self.pagination_class()
-            data = {
-                'count': paginator.page.paginator.count,
-                'next': (paginator.get_next_link()
-                         if paginator.get_next_link() else None),
-                'previous': (paginator.get_previous_link()
-                             if paginator.get_previous_link() else None),
-                'results': serializer.data
-            }
-            return Response(data, status=status.HTTP_200_OK)
+            return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response(
-            {
-                'count': queryset.count(),
-                'next': None, 'previous': None,
-                'results': serializer.data
-            }, status=status.HTTP_200_OK
-        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def retrieve(self, request, *args, **kwargs):
         queryset = CustomUser.objects.filter(username=kwargs['pk'])
