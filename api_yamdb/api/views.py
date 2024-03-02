@@ -5,7 +5,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import filters, pagination, viewsets, filters
+from rest_framework import filters, pagination, viewsets
+from rest_framework.pagination import PageNumberPagination
 
 from api.jwt_utils import create_access_token
 from api.permissions import AllAuthPermission, AdminPermission
@@ -18,7 +19,7 @@ from api.serializers import (
     UserMeSerializer
 )
 from users.models import CustomUser
-from reviews.models import Title, Category, Genre
+from reviews.models import Genre, Title, Category
 
 
 class TitleViewSet(viewsets.ModelViewSet):
@@ -26,20 +27,63 @@ class TitleViewSet(viewsets.ModelViewSet):
     serializer_class = TitleSerializer
     filter_backends = (DjangoFilterBackend,)
     filterset_fields = ('category__slug', 'genre__slug', 'name', 'year')
+    pagination_class = PageNumberPagination
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
+def check_permissions(view_func):
+    def check_view(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            if request.user.role != 'admin':
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        else:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        return view_func(self, request, *args, **kwargs)
+    return check_view
+
+
+class BaseViewSet(viewsets.ModelViewSet):
+    filter_backends = [filters.SearchFilter]
+    search_fields = ('name',)
+    pagination_class = PageNumberPagination
+    lookup_field = 'slug'
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        filter_kwargs = {self.lookup_field: self.kwargs['slug']}
+        obj = get_object_or_404(queryset, **filter_kwargs)
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    @check_permissions
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @check_permissions
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @check_permissions
+    def destroy(self, request, *args, **kwargs):
+        if request.user.is_authenticated and request.user.role == 'admin':
+            self.get_object().delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return super().destroy(request, *args, **kwargs)
+
+
+class CategoryViewSet(BaseViewSet):
+    queryset = Category.objects.order_by('id')
     serializer_class = CategorySerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ('name',)
 
 
-class GenreViewSet(viewsets.ModelViewSet):
-    queryset = Genre.objects.all()
+class GenreViewSet(BaseViewSet):
+    queryset = Genre.objects.order_by('id')
     serializer_class = GenreSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ('name',)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
