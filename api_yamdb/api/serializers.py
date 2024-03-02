@@ -21,6 +21,69 @@ import datetime as dt
 User = get_user_model()
 
 
+
+class CategorySerializer(ModelSerializer):
+    class Meta:
+        fields = ('name', 'slug')
+        model = Category
+
+
+class GenreSerializer(ModelSerializer):
+    class Meta:
+        fields = ('name', 'slug')
+        model = Genre
+
+
+class TitleSerializer(ModelSerializer):
+    genre = SlugRelatedField(
+        many=True,
+        queryset=Genre.objects.all(),
+        slug_field='slug',
+        required=False
+    )
+    category = SlugRelatedField(
+        queryset=Category.objects.all(),
+        slug_field='slug',
+    )
+    rating = SerializerMethodField()
+
+    class Meta:
+        fields = (
+            'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
+        )
+        model = Title
+
+    def to_representation(self, instance):
+        representation = super(
+            TitleSerializer, self
+        ).to_representation(instance)
+        representation['category'] = CategorySerializer(instance.category).data
+        representation['genre'] = GenreSerializer(
+            instance.genre, many=True
+        ).data
+        return representation
+
+    def get_rating(self, obj):
+        scores = Review.objects.filter(title__name=obj.name)
+        if not scores:
+            return None
+        return scores.aggregate(Avg('score'))
+
+    def validate_year(self, value):
+        if value > dt.datetime.now().year:
+            raise ValidationError("Год не может быть больше текущего")
+        return value
+
+
+class BaseSerializer(ModelSerializer):
+    author = SlugRelatedField(
+        default=CurrentUserDefault(),
+        slug_field='username',
+        read_only=True
+    )
+
+
+
 class BaseUserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         max_length=150,
