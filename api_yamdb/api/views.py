@@ -6,7 +6,6 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import filters, pagination, viewsets
-from rest_framework.pagination import PageNumberPagination
 
 from api.jwt_utils import create_access_token
 from api.permissions import AllAuthPermission, AdminPermission
@@ -22,14 +21,6 @@ from users.models import CustomUser
 from reviews.models import Genre, Title, Category
 
 
-class TitleViewSet(viewsets.ModelViewSet):
-    queryset = Title.objects.all()
-    serializer_class = TitleSerializer
-    filter_backends = (DjangoFilterBackend,)
-    filterset_fields = ('category__slug', 'genre__slug', 'name', 'year')
-    pagination_class = PageNumberPagination
-
-
 def check_permissions(view_func):
     def check_view(self, request, *args, **kwargs):
         if request.user.is_authenticated:
@@ -41,10 +32,42 @@ def check_permissions(view_func):
     return check_view
 
 
+class TitleViewSet(viewsets.ModelViewSet):
+    queryset = Title.objects.order_by('id')
+    serializer_class = TitleSerializer
+    filter_backends = (DjangoFilterBackend,)
+    filterset_fields = ('category__slug', 'genre__slug', 'name', 'year')
+
+    def retrieve(self, request, *args, **kwargs):
+        if kwargs:
+            return super().retrieve(request, *args, **kwargs)
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @check_permissions
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @check_permissions
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @check_permissions
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+
 class BaseViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ('name',)
-    pagination_class = PageNumberPagination
     lookup_field = 'slug'
 
     def get_object(self):
