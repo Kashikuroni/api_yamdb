@@ -2,22 +2,28 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
 from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import filters, pagination, viewsets
 
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
+
+
 from api.jwt_utils import create_access_token
-from api.permissions import AllAuthPermission, AdminPermission
+from api.permissions import (
+    AllAuthPermission, AdminPermission,
+    author_or_admin_permission
+)
 from api.serializers import (
-    SignUpSerializer,
-    UserSerializer,
-    TitleSerializer,
-    CategorySerializer,
-    GenreSerializer,
-    UserMeSerializer
+    SignUpSerializer, UserSerializer, UserMeSerializer,
+    TitleSerializer, CategorySerializer, GenreSerializer,
+    ReviewSerializer, CommentSerializer
 )
 from users.models import CustomUser
+from reviews.models import Title, Category, Review
 from reviews.models import Genre, Title, Category
 
 
@@ -111,6 +117,9 @@ class GenreViewSet(BaseViewSet):
 
 class ReviewViewSet(viewsets.ModelViewSet):
     pass
+
+
+
 
 
 class SignUpViewSet(viewsets.ModelViewSet):
@@ -303,3 +312,157 @@ class UserViewSet(viewsets.ModelViewSet):
         user = get_object_or_404(queryset, username=kwargs['pk'])
         self.perform_destroy(user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TitleViewSet(viewsets.ModelViewSet):
+    queryset = Title.objects.all()
+    serializer_class = TitleSerializer
+    filter_backends = (DjangoFilterBackend,)
+    filterset_fields = ('category__slug', 'genre__slug', 'name', 'year')
+    pagination_class = PageNumberPagination
+
+
+def check_permissions(view_func):
+    def check_view(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        if request.user.role != 'admin':
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return view_func(self, request, *args, **kwargs)
+    return check_view
+
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.order_by('id')
+    serializer_class = CategorySerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ('name',)
+    pagination_class = PageNumberPagination
+    lookup_field = 'slug'
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        filter_kwargs = {self.lookup_field: self.kwargs['slug']}
+        obj = get_object_or_404(queryset, **filter_kwargs)
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    @check_permissions
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @check_permissions
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @check_permissions
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+
+class GenreViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.order_by('id')
+    serializer_class = GenreSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ('name',)
+    pagination_class = PageNumberPagination
+
+
+def edit_permissions(view_func):
+    """
+    Декоратор для проверки:
+    Авторизации, Авторства, Админ или Модератор.
+    """
+    def check_view(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        if (request.user.role not in ('admin', 'moderator')
+                and self.get_object().author != self.request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return view_func(self, request, *args, **kwargs)
+    return check_view
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    """Обработка запросов по отзывам."""
+    serializer_class = ReviewSerializer
+    pagination_class = PageNumberPagination
+    http_method_names = [
+        'get', 'post', 'patch', 'delete',
+        'head', 'options', 'trace'
+    ]
+
+    def get_permissions(self):
+        if self.request.method not in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        title = get_object_or_404(Title, pk=self.kwargs['title_id'])
+        return title.reviews.all().order_by('id')
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response({'error': 'Вы уже оставили свой отзыв'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    @author_or_admin_permission
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @author_or_admin_permission
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        title = get_object_or_404(Title, pk=self.kwargs['title_id'])
+        serializer.save(title=title, author=self.request.user)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    """Обработка запросов по комментариям."""
+    serializer_class = CommentSerializer
+    pagination_class = PageNumberPagination
+    http_method_names = [
+        'get', 'post', 'patch', 'delete',
+        'head', 'options', 'trace'
+    ]
+
+    def get_permissions(self):
+        if self.request.method not in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        review = get_object_or_404(Review, pk=self.kwargs['review_id'])
+        return review.comments.all().order_by('id')
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response({'error': 'Вы уже оставили свой отзыв'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @author_or_admin_permission
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @author_or_admin_permission
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        review = get_object_or_404(Review, pk=self.kwargs['review_id'])
+        serializer.save(review=review, author=self.request.user)

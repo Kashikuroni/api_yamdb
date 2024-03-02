@@ -10,12 +10,16 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.core.validators import RegexValidator
 
-from reviews.models import Review, Title, Category, Genre
+from reviews.models import (
+    Title, Category, Genre,
+    Comment, Review
+)
 
 from users.models import CustomUser
 import datetime as dt
 
 User = get_user_model()
+
 
 
 class CategorySerializer(ModelSerializer):
@@ -77,6 +81,7 @@ class BaseSerializer(ModelSerializer):
         slug_field='username',
         read_only=True
     )
+
 
 
 class BaseUserSerializer(serializers.ModelSerializer):
@@ -180,3 +185,72 @@ class UserMeSerializer(BaseUserSerializer):
             'last_name',
             'bio'
         ]
+
+
+class CategorySerializer(ModelSerializer):
+    class Meta:
+        fields = ('name', 'slug')
+        model = Category
+
+
+class GenreSerializer(ModelSerializer):
+    class Meta:
+        fields = ('name', 'slug')
+        model = Genre
+
+
+class TitleSerializer(ModelSerializer):
+    genre = GenreSerializer(required=False, many=True)
+    category = SlugRelatedField(
+        queryset=Category.objects.all(),
+        slug_field='slug'
+    )
+    rating = SerializerMethodField()
+
+    class Meta:
+        fields = (
+            'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
+        )
+        model = Title
+
+    def get_rating(self, obj):
+        scores = Review.objects.filter(title__name=obj.name)
+        avg_score = scores.aggregate(Avg('score'))['score__avg']
+        if avg_score is not None:
+            return int(round(avg_score))
+        return None
+
+    def validate_year(self, value):
+        if value > dt.datetime.now().year:
+            raise ValidationError("Год не может быть больше текущего")
+        return value
+
+
+class BaseReviewSerializer(ModelSerializer):
+    """
+    Этот сериализатор является абстрактным базовым классом
+    и предназначен только для наследования
+    сериализаторами Отзывов и Комментариев.
+    """
+    author = SlugRelatedField(
+        default=CurrentUserDefault(),
+        slug_field='username',
+        read_only=True
+    )
+
+
+class ReviewSerializer(BaseReviewSerializer):
+    """Сериализация для отзывов."""
+
+    class Meta:
+        model = Review
+        fields = ('id', 'title', 'score', 'text', 'author', 'pub_date')
+        read_only_fields = ('id', 'title',)
+
+
+class CommentSerializer(BaseReviewSerializer):
+    """Сериализация для отзывов."""
+    class Meta:
+        model = Comment
+        fields = ('id', 'review', 'text', 'author', 'pub_date')
+        read_only_fields = ('id', 'review',)
