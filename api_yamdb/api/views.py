@@ -7,15 +7,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import filters, pagination, viewsets
-
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
-
 
 from api.jwt_utils import create_access_token
 from api.permissions import (
     AllAuthPermission, AdminPermission,
-    author_or_admin_permission
+    author_or_admin_permission,
+    CustomPermission
 )
 from api.serializers import (
     SignUpSerializer, UserSerializer, UserMeSerializer,
@@ -28,7 +27,7 @@ from reviews.models import Genre, Title, Category
 
 
 class SignUpViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
+    queryset = CustomUser.objects.all().order_by('id')
     serializer_class = SignUpSerializer
 
     def create(self, request, *args, **kwargs):
@@ -110,7 +109,6 @@ class ObtainTokenAPIView(APIView):
 
         # Создаем токен
         token = create_access_token(username)
-
         # Сохраняем токен в модели пользователя
         user.token = token
         user.save()
@@ -119,19 +117,15 @@ class ObtainTokenAPIView(APIView):
 
 
 class UserMeAPIView(APIView):
-    # Используем свой класс разрешений
     permission_classes = [AllAuthPermission]
 
     def get(self, request):
-        # Получаем текущего аутентифицированного пользователя
         user = request.user
-        serializer = UserMeSerializer(user)  # Сериализуем пользователя
-        return Response(serializer.data)  # Возвращаем данные пользователя
+        serializer = UserMeSerializer(user)
+        return Response(serializer.data)
 
     def patch(self, request):
-        # Получаем текущего аутентифицированного пользователя
         user = request.user
-        # Обновляем данные пользователя
         serializer = UserMeSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -140,9 +134,9 @@ class UserMeAPIView(APIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
+    queryset = CustomUser.objects.all().order_by('id')
     serializer_class = UserSerializer
-    permission_classes = [AdminPermission]  # Используем свой класс разрешений
+    permission_classes = [AdminPermission]
     filter_backends = [filters.SearchFilter]
     search_fields = ['username']
     pagination_class = pagination.PageNumberPagination
@@ -152,7 +146,6 @@ class UserViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             role = serializer.validated_data.get('role')
             if role == 'admin':
-                # Создаем пользователя с ролью "admin" и правами администратора
                 user = serializer.save()
                 user.is_staff = True
                 user.save()
@@ -215,16 +208,31 @@ def check_permissions(view_func):
     return check_view
 
 
+class CustomPagination(PageNumberPagination):
+    page_size = 10
+
+
 class TitleViewSet(viewsets.ModelViewSet):
-    queryset = Title.objects.order_by('id')
+    queryset = Title.objects.all()
     serializer_class = TitleSerializer
-    filter_backends = (DjangoFilterBackend,)
-    filterset_fields = ('category__slug', 'genre__slug', 'name', 'year')
+    permission_classes = [CustomPermission]
+    pagination_class = CustomPagination
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter)
+    filterset_fields = ('name', 'year')
+
+    def get_queryset(self):
+        queryset = super().get_queryset().order_by('id')
+        genre_slug = self.request.query_params.get('genre')
+        category_slug = self.request.query_params.get('category')
+        if genre_slug:
+            queryset = queryset.filter(genre__slug=genre_slug)
+        if category_slug:
+            queryset = queryset.filter(category__slug=category_slug)
+        return queryset
 
     def update(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    @check_permissions
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(
@@ -234,17 +242,16 @@ class TitleViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    @check_permissions
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
-    @check_permissions
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
 
 class BaseViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
+    permission_classes = [CustomPermission]
     search_fields = ('name',)
     lookup_field = 'slug'
 
@@ -255,7 +262,6 @@ class BaseViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(self.request, obj)
         return obj
 
-    @check_permissions
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
@@ -265,11 +271,9 @@ class BaseViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    @check_permissions
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
-    @check_permissions
     def destroy(self, request, *args, **kwargs):
         if request.user.is_authenticated and request.user.role == 'admin':
             self.get_object().delete()
@@ -280,11 +284,13 @@ class BaseViewSet(viewsets.ModelViewSet):
 class CategoryViewSet(BaseViewSet):
     queryset = Category.objects.order_by('id')
     serializer_class = CategorySerializer
+    pagination_class = CustomPagination
 
 
 class GenreViewSet(BaseViewSet):
     queryset = Genre.objects.order_by('id')
     serializer_class = GenreSerializer
+    pagination_class = CustomPagination
 
 
 def edit_permissions(view_func):
@@ -305,7 +311,7 @@ def edit_permissions(view_func):
 class ReviewViewSet(viewsets.ModelViewSet):
     """Обработка запросов по отзывам."""
     serializer_class = ReviewSerializer
-    pagination_class = PageNumberPagination
+    pagination_class = CustomPagination
     http_method_names = [
         'get', 'post', 'patch', 'delete',
         'head', 'options', 'trace'
@@ -343,7 +349,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
 class CommentViewSet(viewsets.ModelViewSet):
     """Обработка запросов по комментариям."""
     serializer_class = CommentSerializer
-    pagination_class = PageNumberPagination
+    pagination_class = CustomPagination
     http_method_names = [
         'get', 'post', 'patch', 'delete',
         'head', 'options', 'trace'

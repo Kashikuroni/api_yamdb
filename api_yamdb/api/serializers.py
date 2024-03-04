@@ -1,3 +1,4 @@
+import datetime as dt
 from django.contrib.auth import get_user_model
 from django.db.models import Avg
 
@@ -15,9 +16,6 @@ from reviews.models import (
     Comment, Review
 )
 
-from users.models import CustomUser
-import datetime as dt
-
 User = get_user_model()
 
 
@@ -25,7 +23,7 @@ class BaseUserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         max_length=150,
         validators=[
-            UniqueValidator(queryset=CustomUser.objects.all()),
+            UniqueValidator(queryset=User.objects.all()),
             RegexValidator(
                 regex=r'^[\w.@+-]+$',
                 message=('Поле username должно содержать '
@@ -36,7 +34,7 @@ class BaseUserSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = CustomUser
+        model = User
         fields = ['email', 'username']
 
     def to_representation(self, instance):
