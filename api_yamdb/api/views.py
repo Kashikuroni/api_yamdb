@@ -222,7 +222,7 @@ class TitleViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('id')
+        queryset = super().get_queryset().all()
         genre_slug = self.request.query_params.get('genre')
         category_slug = self.request.query_params.get('category')
         if genre_slug:
