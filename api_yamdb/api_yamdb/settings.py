@@ -12,6 +12,10 @@ JWT_ALGORITHM = 'HS256'
 # Время жизни токена в минутах
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 6000
 
+DOMAIN_NAME = 'sergeiorlovlv@gmail.com'
+
+DEFAULT_FROM_EMAIL = f'noreply@{DOMAIN_NAME}'
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
