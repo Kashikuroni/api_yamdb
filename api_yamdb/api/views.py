@@ -1,6 +1,7 @@
+from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.mail import send_mail
-from django.utils.crypto import get_random_string
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError
 from rest_framework import viewsets, status
@@ -9,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework import filters, pagination, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
+from rest_framework import mixins
 
 from api.jwt_utils import create_access_token
 from api.permissions import (
@@ -41,7 +43,7 @@ class SignUpViewSet(viewsets.ModelViewSet):
         ).first()
 
         if existing_user:
-            confirmation_code = get_random_string(length=6)
+            confirmation_code = default_token_generator.make_token(existing_user)
             existing_user.confirmation_code = confirmation_code
             existing_user.save()
             self.send_confirmation_email(email, confirmation_code)
@@ -53,18 +55,13 @@ class SignUpViewSet(viewsets.ModelViewSet):
 
         # Если пользователь не найден, пробуем создать нового
         serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            confirmation_code = get_random_string(length=6)
-            user.confirmation_code = confirmation_code
-            user.save()
-            self.send_confirmation_email(email, confirmation_code)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        confirmation_code = default_token_generator.make_token(user)
+        user.confirmation_code = confirmation_code
+        user.save()
+        self.send_confirmation_email(email, confirmation_code)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def send_confirmation_email(self, email, confirmation_code):
         subject = 'Код подтверждения регистрации'
@@ -72,8 +69,7 @@ class SignUpViewSet(viewsets.ModelViewSet):
         send_mail(
             subject,
             message,
-            # Замените на свой адрес электронной почты
-            'sergeiorlovlv@gmail.com',
+            settings.DEFAULT_FROM_EMAIL,
             [email],
             fail_silently=False,
         )
@@ -127,13 +123,16 @@ class UserMeAPIView(APIView):
     def patch(self, request):
         user = request.user
         serializer = UserMeSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+        
 
-
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(mixins.CreateModelMixin,
+                  mixins.RetrieveModelMixin,
+                  mixins.ListModelMixin,
+                  mixins.DestroyModelMixin,
+                  viewsets.GenericViewSet):
     queryset = CustomUser.objects.all().order_by('id')
     serializer_class = UserSerializer
     permission_classes = [AdminPermission]
@@ -143,23 +142,15 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            role = serializer.validated_data.get('role')
-            if role == 'admin':
-                user = serializer.save()
-                user.is_staff = True
-                user.save()
-            else:
-                serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        serializer.is_valid(raise_exception=True)
+        role = serializer.validated_data.get('role')
+        if role == 'admin':
+            user = serializer.save()
+            user.is_staff = True
+            user.save()
         else:
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+            serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -181,15 +172,10 @@ class UserViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         user = get_object_or_404(queryset, username=kwargs['pk'])
         serializer = self.get_serializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        else:
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+        
     def destroy(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         user = get_object_or_404(queryset, username=kwargs['pk'])
