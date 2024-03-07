@@ -6,7 +6,7 @@ from django.db import IntegrityError
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import filters, pagination, viewsets
+from rest_framework import filters, pagination, viewsets, mixins
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 
@@ -219,9 +219,10 @@ class TitleViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     filterset_fields = ('name', 'year')
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('id')
+        queryset = super().get_queryset()
         genre_slug = self.request.query_params.get('genre')
         category_slug = self.request.query_params.get('category')
         if genre_slug:
@@ -229,9 +230,6 @@ class TitleViewSet(viewsets.ModelViewSet):
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
         return queryset
-
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -242,14 +240,13 @@ class TitleViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
 
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
-
-
-class BaseViewSet(viewsets.ModelViewSet):
+class BaseViewSet(
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.ListModelMixin
+):
     filter_backends = [filters.SearchFilter]
     permission_classes = [CustomPermission]
     search_fields = ('name',)
@@ -262,33 +259,15 @@ class BaseViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(self.request, obj)
         return obj
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-
-    def retrieve(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if request.user.is_authenticated and request.user.role == 'admin':
-            self.get_object().delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return super().destroy(request, *args, **kwargs)
-
 
 class CategoryViewSet(BaseViewSet):
-    queryset = Category.objects.order_by('id')
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     pagination_class = CustomPagination
 
 
 class GenreViewSet(BaseViewSet):
-    queryset = Genre.objects.order_by('id')
+    queryset = Genre.objects.all()
     serializer_class = GenreSerializer
     pagination_class = CustomPagination
 

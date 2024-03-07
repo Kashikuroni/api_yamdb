@@ -30,6 +30,7 @@ class Category(BaseModel):
         db_table = 'reviews_category'
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
+        ordering = ['id']
 
 
 class Genre(BaseModel):
@@ -37,6 +38,7 @@ class Genre(BaseModel):
         db_table = 'reviews_genre'
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
+        ordering = ['id']
 
 
 class Title(models.Model):
@@ -65,6 +67,7 @@ class Title(models.Model):
         db_table = 'reviews_title'
         verbose_name = 'Произведение'
         verbose_name_plural = 'Произведения'
+        ordering = ['id']
 
 
 class GenreTitle(models.Model):
