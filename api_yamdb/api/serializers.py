@@ -1,14 +1,12 @@
 import datetime as dt
 from django.contrib.auth import get_user_model
-from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 
 from rest_framework.serializers import (
     ModelSerializer, SlugRelatedField,
     CurrentUserDefault, ValidationError,
-    SerializerMethodField
+    ReadOnlyField, CharField
 )
-from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.core.validators import RegexValidator
 
@@ -20,8 +18,11 @@ from reviews.models import (
 User = get_user_model()
 
 
-class BaseUserSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(
+class BaseUserSerializer(ModelSerializer):
+    """
+    Абстрактный Сериализатор для работы с Пользователем и его Авторизацией.
+    """
+    username = CharField(
         max_length=150,
         validators=[
             UniqueValidator(queryset=User.objects.all()),
@@ -45,53 +46,27 @@ class BaseUserSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         role = data.get('role')
-        # Проверяем, что роль существует
         if role and role not in ['admin', 'moderator', 'user']:
-            raise serializers.ValidationError({'error': 'Несуществующая роль'})
+            raise ValidationError({'error': 'Несуществующая роль'})
 
         email = data.get('email')
         username = data.get('username')
-        first_name = data.get('first_name')
-        last_name = data.get('last_name')
 
         if not self.partial and (not email or not username):
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {'error': ('Отсутствует обязательное поле email или username')}
-            )
-
-        if email and len(email) > 254:
-            raise serializers.ValidationError(
-                {'error': ('Длина поля email '
-                           'не должна превышать 254 символа')}
-            )
-
-        if username and len(username) > 150:
-            raise serializers.ValidationError(
-                {'error': ('Длина поля username '
-                           'не должна превышать 150 символов')}
-            )
-
-        if first_name and len(first_name) > 150:
-            raise serializers.ValidationError(
-                {'error': ('Длина поля first_name '
-                           'не должна превышать 150 символов')}
-            )
-
-        if last_name and len(last_name) > 150:
-            raise serializers.ValidationError(
-                {'error': ('Длина поля last_name '
-                           'не должна превышать 150 символов')}
             )
 
         return data
 
 
 class SignUpSerializer(BaseUserSerializer):
+    """Сериализатор авторизации."""
     def validate(self, data):
         data = super().validate(data)
         username = data.get('username')
         if username == 'me':
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {'error': 'Недопустимое значение для имени пользователя'}
             )
         return data
@@ -104,7 +79,8 @@ class SignUpSerializer(BaseUserSerializer):
 
 
 class UserSerializer(BaseUserSerializer):
-    role = serializers.CharField(required=False)
+    """Сериализатор Пользователя."""
+    role = CharField(required=False)
 
     class Meta(BaseUserSerializer.Meta):
         fields = BaseUserSerializer.Meta.fields + [
@@ -115,6 +91,7 @@ class UserSerializer(BaseUserSerializer):
 
 
 class UserMeSerializer(BaseUserSerializer):
+    """Сериализатор Профиля пользователя."""
     class Meta(BaseUserSerializer.Meta):
         fields = BaseUserSerializer.Meta.fields + [
             'first_name',
@@ -124,18 +101,21 @@ class UserMeSerializer(BaseUserSerializer):
 
 
 class CategorySerializer(ModelSerializer):
+    """Сериализатор Категорий."""
     class Meta:
         fields = ('name', 'slug')
         model = Category
 
 
 class GenreSerializer(ModelSerializer):
+    """Сериализатор Жанров."""
     class Meta:
         fields = ('name', 'slug')
         model = Genre
 
 
 class TitleSerializer(ModelSerializer):
+    """Сериализатор Произведений."""
     genre = SlugRelatedField(
         many=True,
         queryset=Genre.objects.all(),
@@ -146,7 +126,7 @@ class TitleSerializer(ModelSerializer):
         queryset=Category.objects.all(),
         slug_field='slug',
     )
-    rating = SerializerMethodField()
+    rating = ReadOnlyField()
 
     class Meta:
         fields = (
@@ -164,16 +144,9 @@ class TitleSerializer(ModelSerializer):
         ).data
         return representation
 
-    def get_rating(self, obj):
-        scores = Review.objects.filter(title__name=obj.name)
-        avg_score = scores.aggregate(Avg('score'))['score__avg']
-        if avg_score is not None:
-            return int(round(avg_score))
-        return None
-
     def validate_year(self, value):
         if value > dt.datetime.now().year:
-            raise ValidationError("Год не может быть больше текущего")
+            raise ValidationError('Год не может быть больше текущего')
         return value
 
 
@@ -199,20 +172,22 @@ class ReviewSerializer(BaseReviewSerializer):
         read_only_fields = ('id', 'title',)
 
     def validate(self, data):
-        """Проверка, что пользователь уже оставлял комментарий при создании нового отзыва."""
+        """
+        Проверка, что пользователь уже оставлял комментарий
+        при создании нового отзыва.
+        """
         user = self.context['request'].user
 
         if not user.is_authenticated:
-            raise serializers.ValidationError("Пользователь не авторизован.")
+            raise ValidationError("Пользователь не авторизован.")
 
-        # Проверка на редактирование или создание - метод create вызывается без instance
         if not self.instance:
-            title_id = self.context['request'].parser_context['kwargs']['title_id']
+            title_id = self.context['request'
+                                    ].parser_context['kwargs']['title_id']
             title = get_object_or_404(Title, pk=title_id)
 
-            # Проверяем, существует ли уже отзыв от этого пользователя на данный title.
             if Review.objects.filter(author=user, title=title).exists():
-                raise serializers.ValidationError("Вы уже оставили свой отзыв на этот продукт.")
+                raise ValidationError('Вы уже оставили свой отзыв.')
         return data
 
 

@@ -1,25 +1,12 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
-class AllAuthPermission(BasePermission):
-    def has_permission(self, request, view):
-        allowed_roles = ['user', 'moderator', 'admin']
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role
-            in allowed_roles
-        )
-
-
 class AdminPermission(BasePermission):
+    """Доступ только администратору и суперпользователю."""
     def has_permission(self, request, view):
         return (
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_staff
-                or request.user.role == 'admin')
+            request.user and request.user.is_authenticated
+            and (request.user.is_staff or request.user.role == 'admin')
         )
 
 
@@ -31,7 +18,11 @@ class IsNotAuthenticatedSaved(BasePermission):
 
 
 class TitlePermission(IsNotAuthenticatedSaved):
-    """Разрешения связанные с Произведениями, Жанрами и Категориями."""
+    """
+    Разрешения связанные с Произведениями, Жанрами и Категориями.
+    Доступ только авторизованному пользователю с ролью Админ,
+    Либо только чтение.
+    """
     def has_permission(self, request, view) -> bool:
         parent_permission = super().has_permission(request, view)
         if (parent_permission
@@ -41,7 +32,12 @@ class TitlePermission(IsNotAuthenticatedSaved):
 
 
 class ReviewPermission(IsNotAuthenticatedSaved):
-    """Разрешения для Отзывов и Комментариев к ним."""
+    """
+    Разрешения для Отзывов и Комментариев к ним.
+    Доступ только авторизованному пользователю с ролью Админ, Модератор,
+    Либо Владелец,
+    Либо только чтение.
+    """
     def has_permission(self, request, view) -> bool:
         parent_permission = super().has_permission(request, view)
         if parent_permission or request.user.is_authenticated:
