@@ -7,8 +7,12 @@ from django.db import models
 
 User = get_user_model()
 
+MINIMAL_SCORE = 0
+MAXIMUM_SCORE = 10
+
 
 class BaseModel(models.Model):
+    """Абстрактная базовая модель для Жанров и Категорий."""
     name = models.CharField(
         'Название',
         max_length=256
@@ -26,25 +30,30 @@ class BaseModel(models.Model):
 
 
 class Category(BaseModel):
+    """Модель Категорий."""
     class Meta:
         db_table = 'reviews_category'
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
+        ordering = ['id']
 
 
 class Genre(BaseModel):
+    """Модель Жанров."""
     class Meta:
         db_table = 'reviews_genre'
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
+        ordering = ['id']
 
 
 class Title(models.Model):
+    """Модель Произведений."""
     name = models.CharField(
         'Название',
         max_length=256
     )
-    year = models.IntegerField('Год выпуска')
+    year = models.PositiveSmallIntegerField('Год выпуска')
     description = models.TextField(
         'Описание',
         blank=True
@@ -65,11 +74,21 @@ class Title(models.Model):
         db_table = 'reviews_title'
         verbose_name = 'Произведение'
         verbose_name_plural = 'Произведения'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.name} {self.genre}'
 
 
 class GenreTitle(models.Model):
+    """Модель связи ManyToMany Жанров и Произведений."""
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE)
     title = models.ForeignKey(Title, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = 'Жанр произведения'
+        verbose_name_plural = 'Жанры произведений'
+        ordering = ['id']
 
     def __str__(self):
         return f'{self.title} {self.genre}'
@@ -88,6 +107,10 @@ class BaseReviewModel(models.Model):
 
     class Meta:
         abstract = True
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.text} {self.pub_date}'
 
 
 class Review(BaseReviewModel):
@@ -101,8 +124,8 @@ class Review(BaseReviewModel):
     score = models.PositiveSmallIntegerField(
         'Оценка',
         validators=[
-            MinValueValidator(0),
-            MaxValueValidator(10)
+            MinValueValidator(MINIMAL_SCORE),
+            MaxValueValidator(MAXIMUM_SCORE)
         ]
     )
     author = models.ForeignKey(
@@ -138,3 +161,4 @@ class Comment(BaseReviewModel):
         db_table = 'reviews_comments'
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
+        ordering = ['id']

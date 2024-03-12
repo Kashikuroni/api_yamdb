@@ -1,22 +1,19 @@
-from django.contrib.auth.tokens import default_token_generator
-from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
-from django.core.mail import send_mail
+from django.contrib.auth.tokens import default_token_generator
 from django.shortcuts import get_object_or_404
-from django.db import IntegrityError
+from django.core.mail import send_mail
+from django.conf import settings
+from django.db.models import Avg, OuterRef, Subquery
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import filters, pagination, viewsets
+from rest_framework import filters, pagination, viewsets, mixins
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
-from rest_framework import mixins
+from rest_framework.permissions import IsAuthenticated
 
 from api.jwt_utils import create_access_token
 from api.permissions import (
-    AllAuthPermission, AdminPermission,
-    author_or_admin_permission,
-    CustomPermission
+    AdminPermission, TitlePermission, ReviewPermission
 )
 from api.serializers import (
     SignUpSerializer, UserSerializer, UserMeSerializer,
@@ -28,24 +25,27 @@ from reviews.models import Title, Category, Review
 from reviews.models import Genre, Title, Category
 
 
+class CustomPagination(PageNumberPagination):
+    page_size = 10
+
+
 class SignUpViewSet(viewsets.ModelViewSet):
+    """Регистрация пользователей и отправка кода подтверждения на почту."""
     queryset = CustomUser.objects.all().order_by('id')
     serializer_class = SignUpSerializer
 
     def create(self, request, *args, **kwargs):
         email = request.data.get('email')
         username = request.data.get('username')
-
-        # Проверяем, существует ли уже пользователь с таким email и username
-        existing_user = CustomUser.objects.filter(
+        user_exst = CustomUser.objects.filter(
             email=email,
             username=username
         ).first()
 
-        if existing_user:
-            confirmation_code = default_token_generator.make_token(existing_user)
-            existing_user.confirmation_code = confirmation_code
-            existing_user.save()
+        if user_exst:
+            confirmation_code = default_token_generator.make_token(user_exst)
+            user_exst.confirmation_code = confirmation_code
+            user_exst.save()
             self.send_confirmation_email(email, confirmation_code)
             return Response(
                 {'message': ('Код подтверждения '
@@ -53,7 +53,6 @@ class SignUpViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK
             )
 
-        # Если пользователь не найден, пробуем создать нового
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -76,9 +75,8 @@ class SignUpViewSet(viewsets.ModelViewSet):
 
 
 class ObtainTokenAPIView(APIView):
-
+    """Создание и отправка токена авторизации пользователю."""
     def post(self, request, *args, **kwargs):
-        # Получаем данные из запроса
         username = request.data.get('username')
         confirmation_code = request.data.get('confirmation_code')
 
@@ -103,9 +101,7 @@ class ObtainTokenAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Создаем токен
         token = create_access_token(username)
-        # Сохраняем токен в модели пользователя
         user.token = token
         user.save()
 
@@ -113,7 +109,8 @@ class ObtainTokenAPIView(APIView):
 
 
 class UserMeAPIView(APIView):
-    permission_classes = [AllAuthPermission]
+    """Обработка запросов к профилю пользователя."""
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -126,13 +123,14 @@ class UserMeAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-        
+
 
 class UserViewSet(mixins.CreateModelMixin,
                   mixins.RetrieveModelMixin,
                   mixins.ListModelMixin,
                   mixins.DestroyModelMixin,
                   viewsets.GenericViewSet):
+    """Обработка запросов к Пользователям."""
     queryset = CustomUser.objects.all().order_by('id')
     serializer_class = UserSerializer
     permission_classes = [AdminPermission]
@@ -175,7 +173,7 @@ class UserViewSet(mixins.CreateModelMixin,
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-        
+
     def destroy(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         user = get_object_or_404(queryset, username=kwargs['pk'])
@@ -183,41 +181,30 @@ class UserViewSet(mixins.CreateModelMixin,
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-def check_permissions(view_func):
-    def check_view(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            if request.user.role != 'admin':
-                return Response(status=status.HTTP_403_FORBIDDEN)
-        else:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        return view_func(self, request, *args, **kwargs)
-    return check_view
-
-
-class CustomPagination(PageNumberPagination):
-    page_size = 10
-
-
 class TitleViewSet(viewsets.ModelViewSet):
+    """Обработка запросов к Произведениям."""
     queryset = Title.objects.all()
     serializer_class = TitleSerializer
-    permission_classes = [CustomPermission]
+    permission_classes = [TitlePermission]
     pagination_class = CustomPagination
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     filterset_fields = ('name', 'year')
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('id')
+        queryset = super().get_queryset()
         genre_slug = self.request.query_params.get('genre')
         category_slug = self.request.query_params.get('category')
         if genre_slug:
             queryset = queryset.filter(genre__slug=genre_slug)
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
-        return queryset
+        reviews_subquery = Review.objects.filter(
+            title_id=OuterRef('pk')
+        ).values('title_id').annotate(avg_rating=Avg('score')
+                                      ).values('avg_rating')
 
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return queryset.annotate(rating=Subquery(reviews_subquery[:1]))
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -228,16 +215,16 @@ class TitleViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
 
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
-
-
-class BaseViewSet(viewsets.ModelViewSet):
+class BaseViewSet(
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.ListModelMixin
+):
+    """Абстрактный класс для обработки Категорий и Жанров."""
     filter_backends = [filters.SearchFilter]
-    permission_classes = [CustomPermission]
+    permission_classes = [TitlePermission]
     search_fields = ('name',)
     lookup_field = 'slug'
 
@@ -248,84 +235,34 @@ class BaseViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(self.request, obj)
         return obj
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-
-    def retrieve(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if request.user.is_authenticated and request.user.role == 'admin':
-            self.get_object().delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return super().destroy(request, *args, **kwargs)
-
 
 class CategoryViewSet(BaseViewSet):
-    queryset = Category.objects.order_by('id')
+    """Обработка запросов к Категориям."""
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     pagination_class = CustomPagination
 
 
 class GenreViewSet(BaseViewSet):
-    queryset = Genre.objects.order_by('id')
+    """Обработка запросов к Жанрам."""
+    queryset = Genre.objects.all()
     serializer_class = GenreSerializer
     pagination_class = CustomPagination
 
 
-def edit_permissions(view_func):
-    """
-    Декоратор для проверки:
-    Авторизации, Авторства, Админ или Модератор.
-    """
-    def check_view(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        if (request.user.role not in ('admin', 'moderator')
-                and self.get_object().author != self.request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        return view_func(self, request, *args, **kwargs)
-    return check_view
-
-
 class ReviewViewSet(viewsets.ModelViewSet):
-    """Обработка запросов по отзывам."""
+    """Обработка запросов к Отзывам."""
     serializer_class = ReviewSerializer
+    permission_classes = [ReviewPermission]
     pagination_class = CustomPagination
     http_method_names = [
         'get', 'post', 'patch', 'delete',
         'head', 'options', 'trace'
     ]
 
-    def get_permissions(self):
-        if self.request.method not in SAFE_METHODS:
-            return [IsAuthenticated()]
-        return super().get_permissions()
-
     def get_queryset(self):
         title = get_object_or_404(Title, pk=self.kwargs['title_id'])
         return title.reviews.all().order_by('id')
-
-    def create(self, request, *args, **kwargs):
-        try:
-            return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response({'error': 'Вы уже оставили свой отзыв'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-    @author_or_admin_permission
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
-
-    @author_or_admin_permission
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         title = get_object_or_404(Title, pk=self.kwargs['title_id'])
@@ -333,41 +270,22 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    """Обработка запросов по комментариям."""
+    """Обработка запросов к Комментариям."""
     serializer_class = CommentSerializer
+    permission_classes = [ReviewPermission]
     pagination_class = CustomPagination
     http_method_names = [
         'get', 'post', 'patch', 'delete',
         'head', 'options', 'trace'
     ]
 
-    def get_permissions(self):
-        if self.request.method not in SAFE_METHODS:
-            return [IsAuthenticated()]
-        return super().get_permissions()
+    def get_review(self, review_id: int):
+        return get_object_or_404(Review, pk=review_id)
 
     def get_queryset(self):
-        review = get_object_or_404(Review, pk=self.kwargs['review_id'])
-        return review.comments.all().order_by('id')
-
-    def create(self, request, *args, **kwargs):
-        try:
-            return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response({'error': 'Вы уже оставили свой отзыв'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-    def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
-
-    @author_or_admin_permission
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
-
-    @author_or_admin_permission
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
+        review = self.get_review(self.kwargs['review_id'])
+        return review.comments.all()
 
     def perform_create(self, serializer):
-        review = get_object_or_404(Review, pk=self.kwargs['review_id'])
+        review = self.get_review(self.kwargs['review_id'])
         serializer.save(review=review, author=self.request.user)
