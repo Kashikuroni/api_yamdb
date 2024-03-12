@@ -91,6 +91,7 @@ class BaseReviewModel(models.Model):
 
     class Meta:
         abstract = True
+        ordering = ['id']
 
 
 class Review(BaseReviewModel):

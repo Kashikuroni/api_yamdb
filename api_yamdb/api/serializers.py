@@ -1,6 +1,7 @@
 import datetime as dt
 from django.contrib.auth import get_user_model
 from django.db.models import Avg
+from django.shortcuts import get_object_or_404
 
 from rest_framework.serializers import (
     ModelSerializer, SlugRelatedField,
@@ -196,6 +197,23 @@ class ReviewSerializer(BaseReviewSerializer):
         model = Review
         fields = ('id', 'title', 'score', 'text', 'author', 'pub_date')
         read_only_fields = ('id', 'title',)
+
+    def validate(self, data):
+        """Проверка, что пользователь уже оставлял комментарий при создании нового отзыва."""
+        user = self.context['request'].user
+
+        if not user.is_authenticated:
+            raise serializers.ValidationError("Пользователь не авторизован.")
+
+        # Проверка на редактирование или создание - метод create вызывается без instance
+        if not self.instance:
+            title_id = self.context['request'].parser_context['kwargs']['title_id']
+            title = get_object_or_404(Title, pk=title_id)
+
+            # Проверяем, существует ли уже отзыв от этого пользователя на данный title.
+            if Review.objects.filter(author=user, title=title).exists():
+                raise serializers.ValidationError("Вы уже оставили свой отзыв на этот продукт.")
+        return data
 
 
 class CommentSerializer(BaseReviewSerializer):
