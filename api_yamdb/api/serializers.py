@@ -1,14 +1,14 @@
 import datetime as dt
+
+from django.core.validators import RegexValidator
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-
 from rest_framework.serializers import (
     ModelSerializer, SlugRelatedField,
     CurrentUserDefault, ValidationError,
     ReadOnlyField, CharField
 )
 from rest_framework.validators import UniqueValidator
-from django.core.validators import RegexValidator
 
 from reviews.models import (
     Title, Category, Genre,

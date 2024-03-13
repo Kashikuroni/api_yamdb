@@ -1,5 +1,6 @@
-from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from django.urls import path, include
+
 from api import views
 
 router_v1 = DefaultRouter()

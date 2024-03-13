@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
+import uuid
+
 from django.conf import settings
 import jwt
-import uuid
 
 from users.models import CustomUser
 
